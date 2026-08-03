@@ -263,6 +263,95 @@ function VehicleScript:deactivateShield()
 end
 ```
 
+### 5. Storing a signal in a global Lua table
+
+Instead of creating a signal separately in every script and matching `messageKey` strings by hand, you can create it once and store it in a global Lua table. Any other script in the mod can then read that same `Signal` object directly — no need to know the `messageKey` at all, since they all share the exact same instance.
+
+```lua
+-- GlobalSignals.lua — loaded once, e.g. via a dofile/require at the top of your scripts
+local Signal = require("signal")
+
+-- A global table accessible from any script in the mod
+MyModSignals = MyModSignals or {}
+
+MyModSignals.onPlayerScored = MyModSignals.onPlayerScored or Signal.new("global_player_scored", { debug = true })
+```
+
+Any script can now connect to or emit from the very same signal instance via the global table:
+
+```lua
+-- ScoreKeeper.lua — emits the signal
+function ScoreKeeper:server_onCreate()
+    self.data = { points = 0 }
+end
+
+function ScoreKeeper:addPoints(amount)
+    self.data.points = self.data.points + amount
+    MyModSignals.onPlayerScored:emit({ points = self.data.points })
+end
+```
+
+```lua
+-- ScoreDisplay.lua — listens to the signal
+ScoreDisplay = class()
+
+function ScoreDisplay:server_onCreate()
+    MyModSignals.onPlayerScored:connect("onScore", self)
+end
+
+function ScoreDisplay:onScore(data)
+    print("Score updated:", data.points)
+end
+```
+
+> **Note:** since the table is global, make sure `GlobalSignals.lua` is loaded before any script that references `MyModSignals` — for example, by placing a `dofile("$CONTENT_.../Scripts/GlobalSignals.lua")` at the top of every script that needs it, or by relying on your mod's load order.
+
+### 6. Fully disconnecting a signal and destroying the instance
+
+As shown in the [`disconnect`](#signaldisconnect) reference above, calling `signal:disconnect()` only performs a **soft** disconnect: it flips `isConnected` to `false` so the wrapped method stops being invoked, but the hook installed on `target[callbackName]` is never removed, and the `Signal` object itself still exists in memory as long as something references it.
+
+To fully tear a signal down — so the hook stops intercepting calls, the connection to `sm.message` is dropped, and the `Signal` instance can be garbage-collected — you need to do a bit more than just call `disconnect()`:
+
+```lua
+function MyScript:teardownSignal()
+    if self.onDamage then
+        -- 1. Soft-disconnect first, so no stale calls slip through
+        --    while we tear the rest down.
+        self.onDamage:disconnect()
+
+        -- 2. Restore the original (unwrapped) method on the target,
+        --    removing the hook that Signal:connect() installed.
+        --    (Requires you to have kept a reference to the original
+        --    method yourself before calling :connect(), since the
+        --    module does not expose it.)
+        if self.originalOnDamage then
+            self[self.onDamage.callbackName] = self.originalOnDamage
+            self.originalOnDamage = nil
+        end
+
+        -- 3. Drop every reference to the Signal object so Lua's
+        --    garbage collector can reclaim it.
+        self.onDamage = nil
+    end
+end
+```
+
+To make step 2 possible, keep a copy of the method before you connect it:
+
+```lua
+function MyScript:server_onCreate()
+    self.originalOnDamage = self.onDamageReceived   -- keep a reference for later restoration
+
+    self.onDamage = Signal.new("vehicle_damage", nil, self)
+    self.onDamage:connect("onDamageReceived")
+end
+```
+
+> **Important limitations of this module:**
+> - `signal.lua` does **not** call anything like `sm.message.unsubscribe` — there is no built-in API in this file to cancel the underlying `sm.message` subscription itself, only to stop reacting to it (`isConnected = false`).
+> - The method-wrapping hook (`_isHooked`) is permanent for the lifetime of `target` — the module has no method to unwrap it automatically. The workaround above (steps 1–3) is the closest you can get with the current implementation: disconnect, manually restore the original method, then drop all references to the `Signal` object.
+> - If you never need to literally remove the hook (most gameplay scripts don't), calling `disconnect()` and setting `self.onDamage = nil` is usually enough in practice — the leftover hook simply won't do anything once `isConnected` is `false`, and it will be collected along with `target` when the target itself is destroyed.
+
 ---
 
 ## Notes

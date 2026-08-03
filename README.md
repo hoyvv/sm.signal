@@ -46,6 +46,8 @@ local Signal = require("signal")
 
 ## API
 
+> **Note:** All methods below (`Signal.new`, `Signal.define`, `Signal:connect`, `Signal:disconnect`, `Signal:emit`, `Signal:mute`, `Signal:unmute`) are **server-side only**. Call them from `server_*` callbacks (e.g. `server_onCreate`) — they are not meant to be used in `client_*` code.
+
 ### `Signal.new(messageKey, options, target)`
 
 Creates a new signal instance.

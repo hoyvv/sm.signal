@@ -36,10 +36,10 @@ It also supports:
 
 ## Installation
 
-Place `signal.lua` in your mod's script folder and require it:
+Place `signal.lua` in your mod's script folder and load it with `dofile`, using the `$CONTENT_` path to your mod's UUID:
 
 ```lua
-local Signal = require("signal")
+local Signal = dofile("$CONTENT_<your-mod-uuid>/Scripts/signal.lua")
 ```
 
 ---
@@ -188,7 +188,7 @@ self.onDamage:unmute()   -- re-enable sending
 
 **Sender script (e.g., a button):**
 ```lua
-local Signal = require("signal")
+local Signal = dofile("$CONTENT_<your-mod-uuid>/Scripts/signal.lua")
 
 ButtonScript = class()
 
@@ -205,7 +205,7 @@ end
 
 **Receiver script (e.g., a door):**
 ```lua
-local Signal = require("signal")
+local Signal = dofile("$CONTENT_<your-mod-uuid>/Scripts/signal.lua")
 
 DoorScript = class()
 
@@ -223,7 +223,7 @@ end
 ### 2. Bulk signal creation with `Signal.define`
 
 ```lua
-local Signal = require("signal")
+local Signal = dofile("$CONTENT_<your-mod-uuid>/Scripts/signal.lua")
 
 VehicleScript = class()
 
@@ -271,7 +271,7 @@ Instead of creating a signal separately in every script and matching `messageKey
 
 ```lua
 -- GlobalSignals.lua — loaded once, e.g. via a dofile/require at the top of your scripts
-local Signal = require("signal")
+local Signal = dofile("$CONTENT_<your-mod-uuid>/Scripts/signal.lua")
 
 -- A global table accessible from any script in the mod
 MyModSignals = MyModSignals or {}
